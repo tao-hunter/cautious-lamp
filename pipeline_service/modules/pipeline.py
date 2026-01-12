@@ -81,6 +81,20 @@ class GenerationPipeline:
             "Keep fine details. Background: solid neutral color only."
         )
 
+        def _to_rgb_on_neutral_bg(img: Image.Image, bg: tuple[int, int, int] = (255, 255, 255)) -> Image.Image:
+            """
+            Ensure images are RGB with a neutral background.
+            This avoids implicit alpha->black compositing when downstream code does .convert("RGB"),
+            which can destroy edge quality and transparency/material cues (common "style/material" failures).
+            """
+            if img.mode == "RGBA":
+                bg_img = Image.new("RGB", img.size, bg)
+                # Use alpha channel as mask for compositing
+                alpha = img.getchannel("A")
+                bg_img.paste(img.convert("RGB"), mask=alpha)
+                return bg_img
+            return img.convert("RGB")
+
         # 1. left view
         left_image_edited = self.qwen_edit.edit_image(
             prompt_image=image,
@@ -117,9 +131,14 @@ class GenerationPipeline:
         # and generally helps the model keep the original presentation cues.
         original_image_with_background = image.convert("RGB")
 
+        # IMPORTANT: RMBG returns RGBA; normalize to RGB on neutral background for Trellis.
+        # Use white to minimize dark halos and preserve perceived material/texture.
+        left_image_for_trellis = _to_rgb_on_neutral_bg(left_image_without_background, bg=(255, 255, 255))
+        right_image_for_trellis = _to_rgb_on_neutral_bg(right_image_without_background, bg=(255, 255, 255))
+
         return [
-            left_image_without_background,
-            right_image_without_background,
+            left_image_for_trellis,
+            right_image_for_trellis,
             # back_image_without_background,
             original_image_with_background,
         ]
