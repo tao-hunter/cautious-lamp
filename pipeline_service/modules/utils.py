@@ -50,7 +50,7 @@ def decode_image(prompt: str) -> Image.Image:
     image_bytes = base64.b64decode(prompt)
     return Image.open(io.BytesIO(image_bytes)).convert("RGB")
 
-def to_png_base64(image: Image.Image) -> str:
+def to_png_base64(image: Image.Image | list[Image.Image]) -> str:
     """
     Convert the image to PNG format and encode to base64.
 
@@ -60,6 +60,29 @@ def to_png_base64(image: Image.Image) -> str:
     Returns:
         Base64 encoded PNG image.
     """
+    if isinstance(image, list):
+        # Create a simple horizontal strip for debugging/inspection.
+        images = [im.convert("RGB") for im in image if im is not None]
+        if not images:
+            return ""
+
+        target_h = max(im.height for im in images)
+        resized = []
+        for im in images:
+            if im.height == target_h:
+                resized.append(im)
+                continue
+            new_w = max(1, int(im.width * (target_h / im.height)))
+            resized.append(im.resize((new_w, target_h)))
+
+        total_w = sum(im.width for im in resized)
+        strip = Image.new("RGB", (total_w, target_h))
+        x = 0
+        for im in resized:
+            strip.paste(im, (x, 0))
+            x += im.width
+        image = strip
+
     buffer = io.BytesIO()
     image.save(buffer, format="PNG")
 

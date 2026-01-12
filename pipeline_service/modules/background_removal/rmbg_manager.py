@@ -6,7 +6,7 @@ import torch
 from PIL import Image
 from transformers import AutoModelForImageSegmentation
 from torchvision import transforms
-from torchvision.transforms.functional import to_pil_image, resized_crop
+from torchvision.transforms.functional import to_pil_image, resized_crop, resize
 
 from config import Settings
 from logger_config import logger
@@ -79,6 +79,7 @@ class BackgroundRemovalService:
         """
         try:
             t1 = time.time()
+            self.ensure_ready()
             # Check if the image has alpha channel
             has_alpha = False
             
@@ -89,8 +90,8 @@ class BackgroundRemovalService:
                     has_alpha=True
             
             if has_alpha:
-                # If the image has alpha channel, return the image
-                output = image
+                # If the image already has transparency, treat it as "background removed".
+                image_without_background = image
                 
             else:
                 # PIL.Image (H, W, C) C=3
@@ -100,7 +101,8 @@ class BackgroundRemovalService:
                 rgb_tensor = self.transforms(rgb_image).to(self.device)
                 output = self._remove_background(rgb_tensor)
 
-                image_without_background = to_pil_image(output[:3])
+                # Output is RGBA (C=4); keep alpha.
+                image_without_background = to_pil_image(output)
 
             removal_time = time.time() - t1
             logger.success(f"Background remove - Time: {removal_time:.2f}s - OutputSize: {image_without_background.size} - InputSize: {image.size}")
@@ -127,25 +129,30 @@ class BackgroundRemovalService:
         # Get bounding box indices
         bbox_indices = torch.argwhere(mask > 0.8)
         if len(bbox_indices) == 0:
-            crop_args = dict(top = 0, left = 0, height = mask.shape[1], width = mask.shape[0])
+            # No foreground detected: return resized RGBA with opaque alpha.
+            opaque_mask = torch.ones_like(mask).unsqueeze(0)
+            tensor_rgba = torch.cat([image_tensor, opaque_mask], dim=-3)
+            return resize(tensor_rgba, list(self.output_size), antialias=False)
         else:
-            h_min, h_max = torch.aminmax(bbox_indices[:, 1])
-            w_min, w_max = torch.aminmax(bbox_indices[:, 0])
-            width, height = w_max - w_min, h_max - h_min
-            center =  (h_max + h_min) / 2, (w_max + w_min) / 2
+            # bbox_indices rows are (y, x)
+            y_min, y_max = torch.aminmax(bbox_indices[:, 0])
+            x_min, x_max = torch.aminmax(bbox_indices[:, 1])
+            width, height = x_max - x_min, y_max - y_min
+            center_y = (y_max + y_min) / 2
+            center_x = (x_max + x_min) / 2
             size = max(width, height)
             padded_size_factor = 1 + self.padding_percentage
             size = int(size * padded_size_factor)
-            top = int(center[1] - size // 2)
-            left = int(center[0] - size // 2)
-            bottom = int(center[1] + size // 2)
-            right = int(center[0] + size // 2)
+            top = int(center_y - size // 2)
+            left = int(center_x - size // 2)
+            bottom = int(center_y + size // 2)
+            right = int(center_x + size // 2)
 
             if self.limit_padding:
                 top = max(0, top)
                 left = max(0, left)
-                bottom = min(mask.shape[1], bottom)
-                right = min(mask.shape[0], right)
+                bottom = min(mask.shape[0], bottom)
+                right = min(mask.shape[1], right)
 
             crop_args = dict(
                 top=top,

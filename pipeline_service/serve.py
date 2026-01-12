@@ -305,7 +305,12 @@ async def generate_spz(
 @app.get("/setup/info")
 async def get_setup_info() -> dict:
     try:
-        return settings.dict()
+        cfg = settings.dict()
+        # Redact sensitive values if present
+        for k in ("hf_token", "vllm_api_key"):
+            if cfg.get(k):
+                cfg[k] = "***"
+        return cfg
     except Exception as e:
         logger.error(f"Failed to get setup info: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve configuration")

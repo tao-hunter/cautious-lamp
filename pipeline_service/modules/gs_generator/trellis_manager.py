@@ -405,6 +405,7 @@ class TrellisService:
         params = self.default_params.overrided(trellis_request.params)
 
         start = time.time()
+        buffer = None
         try:
             if mode == "single":
                 outputs = self.pipeline.run(
@@ -458,6 +459,10 @@ class TrellisService:
                     num_oversamples=params.num_oversamples,
                     voxel_threshold=25000,
                 )
+            elif mode == "multi_multi":
+                raise ValueError("mode='multi_multi' is not implemented in TrellisService.generate(). Use 'multi_sto' or 'multi_with_voxel_count'.")
+            else:
+                raise ValueError(f"Unsupported mode: {mode}")
             generation_time = time.time() - start
             gaussian = outputs["gaussian"][0]
 
@@ -473,6 +478,6 @@ class TrellisService:
             logger.success(f"Trellis finished generation in {generation_time:.2f}s.")
             return result
         finally:
-            if buffer:
+            if buffer is not None:
                 buffer.close()
 

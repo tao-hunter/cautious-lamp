@@ -57,12 +57,13 @@ class GenerationPipeline:
 
     def _clean_gpu_memory(self) -> None:
         gc.collect()
-        torch.cuda.empty_cache()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
     # --- HÀM CỐT LÕI 1: CHUẨN BỊ ẢNH (CHỈ CHẠY 1 LẦN) ---
     async def prepare_input_images(
         self, image_bytes: bytes, seed: int = 42
-    ) -> tuple[Image.Image, Image.Image]:
+    ) -> list[Image.Image]:
         """Chạy Qwen và RMBG để tạo view. Tách rời để dùng lại cho nhiều seed Trellis."""
         image_base64 = base64.b64encode(image_bytes).decode("utf-8")
         image = decode_image(image_base64)
