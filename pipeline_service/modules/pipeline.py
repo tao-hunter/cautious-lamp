@@ -112,13 +112,16 @@ class GenerationPipeline:
         left_image_without_background = self.rmbg.remove_background(left_image_edited)
         right_image_without_background = self.rmbg.remove_background(right_image_edited)
         # back_image_without_background = self.rmbg.remove_background(back_image_edited)
-        original_image_without_background = self.rmbg.remove_background(image)
+        # Keep the original image (with its background) to preserve lighting and environmental context.
+        # This targets feedback like "missing environmental context", "missing aged/weathered appearance",
+        # and generally helps the model keep the original presentation cues.
+        original_image_with_background = image.convert("RGB")
 
         return [
             left_image_without_background,
             right_image_without_background,
             # back_image_without_background,
-            original_image_without_background,
+            original_image_with_background,
         ]
 
     # --- HÀM CỐT LÕI 2: CHẠY TRELLIS (CHẠY NHIỀU LẦN VỚI SEED KHÁC NHAU) ---
