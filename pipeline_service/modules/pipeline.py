@@ -5,7 +5,7 @@ import io
 import time
 from typing import Literal, Optional
 
-from PIL import Image
+from PIL import Image, ImageEnhance
 import torch
 import gc
 
@@ -122,25 +122,24 @@ class GenerationPipeline:
         #     prompt="Show this object in back three-quarters view and make sure it is fully visible. Turn background neutral solid color contrasting with an object. Delete background details. Delete watermarks. Keep object colors. Sharpen image details",
         # )
 
-        # 2. Remove background
-        left_image_without_background = self.rmbg.remove_background(left_image_edited)
-        right_image_without_background = self.rmbg.remove_background(right_image_edited)
-        # back_image_without_background = self.rmbg.remove_background(back_image_edited)
-        # Keep the original image (with its background) to preserve lighting and environmental context.
-        # This targets feedback like "missing environmental context", "missing aged/weathered appearance",
-        # and generally helps the model keep the original presentation cues.
-        original_image_with_background = image.convert("RGB")
+        # 2. Build Trellis inputs.
+        # We prefer the HIGH-RES Qwen edited views (neutral background) because RMBG currently
+        # outputs a resized/cropped image (often ~518px) which can erase fine engravings/mechanical detail
+        # and distort material cues (a common "style/texture/detail" failure pattern).
+        left_image_for_trellis = left_image_edited.convert("RGB")
+        right_image_for_trellis = right_image_edited.convert("RGB")
 
-        # IMPORTANT: RMBG returns RGBA; normalize to RGB on neutral background for Trellis.
-        # Use white to minimize dark halos and preserve perceived material/texture.
-        left_image_for_trellis = _to_rgb_on_neutral_bg(left_image_without_background, bg=(255, 255, 255))
-        right_image_for_trellis = _to_rgb_on_neutral_bg(right_image_without_background, bg=(255, 255, 255))
+        # Keep the original image WITH background to preserve lighting/environment cues
+        # (e.g. laser beams, reflections, bokeh) that shouldn't be removed.
+        original_image_with_background = image.convert("RGB")
+        # Light sharpening helps preserve small mechanical/engraving details without changing colors.
+        original_image_for_trellis = ImageEnhance.Sharpness(original_image_with_background).enhance(1.25)
 
         return [
             left_image_for_trellis,
             right_image_for_trellis,
             # back_image_without_background,
-            original_image_with_background,
+            original_image_for_trellis,
         ]
 
     # --- HÀM CỐT LÕI 2: CHẠY TRELLIS (CHẠY NHIỀU LẦN VỚI SEED KHÁC NHAU) ---
