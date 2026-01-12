@@ -115,13 +115,28 @@ async def run_champion_generation(
     else:
         logger.info(f"📊 Voxel count {reference_voxel_count} > {settings.candidate_ranges[-1][0]} → {num_texture_candidates} candidate(s)")
     
-    # Select N smallest shapes from the 5 generated
-    # Keep track of original indices during sorting
+    # Select shapes with DIVERSITY rather than always "smallest".
+    # This targets common failure patterns:
+    # - too-small shapes -> missing details / oversimplified craftsmanship
+    # - too-large shapes -> invented extra structures (e.g., double bowl)
     indexed_shapes = [(i, coords, voxel_count) for i, (coords, voxel_count) in enumerate(shape_candidates)]
-    sorted_indexed_shapes = sorted(indexed_shapes, key=lambda x: x[2])  # Sort by voxel count
-    selected_indexed_shapes = sorted_indexed_shapes[:num_texture_candidates]  # Take N smallest
-    
-    logger.success(f"📐 Selected {num_texture_candidates} smallest shapes:")
+    sorted_indexed_shapes = sorted(indexed_shapes, key=lambda x: x[2])  # Sort by voxel count asc
+    k = max(1, min(num_texture_candidates, len(sorted_indexed_shapes)))
+
+    if k == 1:
+        selected_indexed_shapes = [sorted_indexed_shapes[len(sorted_indexed_shapes) // 2]]  # median
+    elif k == 2:
+        selected_indexed_shapes = [sorted_indexed_shapes[0], sorted_indexed_shapes[-1]]  # min + max
+    else:
+        # min + median + max (and if k>3, fill evenly spaced indices)
+        idxs = {0, len(sorted_indexed_shapes) // 2, len(sorted_indexed_shapes) - 1}
+        if k > 3:
+            # add evenly spaced indices
+            for j in range(1, k - 1):
+                idxs.add(int(round(j * (len(sorted_indexed_shapes) - 1) / (k - 1))))
+        selected_indexed_shapes = [sorted_indexed_shapes[i] for i in sorted(idxs)][:k]
+
+    logger.success(f"📐 Selected {len(selected_indexed_shapes)} diverse shapes for texturing:")
     for original_idx, coords, voxel_count in selected_indexed_shapes:
         logger.info(f"   Shape {original_idx+1}: {voxel_count} voxels")
     

@@ -71,18 +71,34 @@ class GenerationPipeline:
             seed = secure_randint(0, 10000)
         set_random_seed(seed)
 
+        # Strong constraint: we want ONLY viewpoint changes, not stylistic/structural edits.
+        # This directly targets failure modes like "cartoonish", "wrong lighting", "wrong gem colors",
+        # and "invented/different structure" seen in judging feedback.
+        preserve_prompt_suffix = (
+            "CRITICAL: Only change the camera/viewpoint. Do NOT change the object identity, "
+            "geometry, number of parts, proportions, design elements, materials, patterns, colors, "
+            "or lighting style. Do NOT add/remove objects or decorations. Keep the same aesthetic. "
+            "Keep fine details. Background: solid neutral color only."
+        )
+
         # 1. left view
         left_image_edited = self.qwen_edit.edit_image(
             prompt_image=image,
             seed=seed,
-            prompt="Show this object in left three-quarters view and make sure it is fully visible. Turn background neutral solid color contrasting with an object. Delete background details. Delete watermarks. Keep object colors. Sharpen image details",
+            prompt=(
+                "Show this object in left three-quarters view and make sure it is fully visible. "
+                "Remove any text/watermarks. " + preserve_prompt_suffix
+            ),
         )
 
         # right view
         right_image_edited = self.qwen_edit.edit_image(
             prompt_image=image,
             seed=seed,
-            prompt="Show this object in right three-quarters view and make sure it is fully visible. Turn background neutral solid color contrasting with an object. Delete background details. Delete watermarks. Keep object colors. Sharpen image details",
+            prompt=(
+                "Show this object in right three-quarters view and make sure it is fully visible. "
+                "Remove any text/watermarks. " + preserve_prompt_suffix
+            ),
         )
 
         # back view
