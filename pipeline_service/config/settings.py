@@ -52,10 +52,6 @@ class Settings(BaseSettings):
     padding_percentage: float = Field(default=0.2, env="PADDING_PERCENTAGE")
     limit_padding: bool = Field(default=True, env="LIMIT_PADDING")
     
-    vllm_url: str = "http://localhost:8095/v1"
-    vllm_api_key: str = "local"
-    vllm_model_name: str = "THUDM/GLM-4.1V-9B-Thinking"
-    
     # Maximum number of shape candidates to generate in Stage 1
     max_candidates: int = Field(default=3, env="MAX_CANDIDATES")
     
